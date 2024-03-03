@@ -36,6 +36,42 @@ func main() {
 }
 ```
 
+## A small example
+If you'd like, you can try out this small snippet below.
+```go
+package main
+
+import (
+    "fmt"
+
+    "github.com/Fr4cK5/chad/chad"
+)
+
+func main() {
+    c := chad.NewChad()
+    c.RegisterArgs(
+        []chad.Arg{
+            *chad.NewArg("first-name", "Your first name", "", false),
+            *chad.NewArg("last-name", "Your last name", "", true),
+        },
+        0,
+    )
+    c.Parse()
+
+    last_name := c.GetStringFlag("last-name")
+    if !c.IsFlagDefault("first-name") {
+        first_name := c.GetStringFlag("first-name")
+        fmt.Printf("Hello %v %v, enjoy your stay.", first_name, last_name)
+    } else  {
+        fmt.Printf("Hello Mr. / Mrs. %v, enjoy your stay.", last_name)
+    }
+}
+```
+Now, try running these two commands:
+  - `go run main.go --last-name Smith`
+  - `go run main.go --last-name Smith --first-name John`.
+  - `go run main.go --last-name Smith --first-name John --age 69`.
+
 ## This may interest you
   - Validation is performed automatically
     - Missing arguments will be caught and the program exits upon detection.
