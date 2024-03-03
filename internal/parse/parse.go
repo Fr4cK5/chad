@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // A datastructure representing the result
@@ -169,7 +170,7 @@ func parseFlags(input *[]string) (*map[string]string, *[]string, error) {
 		}
 
 		if strings.HasPrefix(item, "--") && len(item) >= 3 {
-			if i+1 != len(*input) && !strings.HasPrefix((*input)[i+1], "-") {
+			if i+1 != len(*input) && isValue((*input)[i+1]) {
 				skip_next = true
 				assigned[item[2:]] = (*input)[i+1]
 			} else {
@@ -182,10 +183,10 @@ func parseFlags(input *[]string) (*map[string]string, *[]string, error) {
 					return nil, nil, fmt.Errorf("tried to parse illegal character '-' as a parameter name in stack '%v'", flags)
 				}
 
-				// If it's the last flag of the stack (eg. 'L' in -rfL), and the original input still got more items
+				// If it's the last flag of the stack (j+1) (eg. 'L' in -rfL), and the original input still got more items (i+1) < len(*input)
 				// we assign the next item to the last flag 'L'.
 				result := ""
-				if j+1 == len(flags) && i+1 != len(*input) && !strings.HasPrefix((*input)[i+1], "-") {
+				if j+1 == len(flags) && i+1 < len(*input) && isValue((*input)[i+1]) {
 					skip_next = true
 					result = (*input)[i+1]
 				} 
@@ -267,4 +268,18 @@ func isValidDelim(r rune) bool {
 	return r == '"' ||
 		r == '\'' ||
 		r == '`'
+}
+
+func isValue(s string) bool {
+
+	l := len(s)
+
+	if l <= 1 {
+		return false
+	}
+
+	arg_prefix := strings.HasPrefix(s, "-")
+	starts_with_number := unicode.IsDigit(rune(s[1]))
+
+	return !arg_prefix || (arg_prefix && starts_with_number)
 }

@@ -263,7 +263,7 @@ func isTypeOk(expected interface{}, actual string) bool {
 
 func isValidInt(s string) bool {
 	for _, c := range s {
-		if !unicode.IsDigit(c) {
+		if !unicode.IsDigit(c) && rune(c) != '-' && rune(c) != '+' {
 			return false
 		}
 	}
