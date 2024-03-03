@@ -23,7 +23,7 @@ func main() {
 //                        ^^^^^    ^^^^^^^^^^^^^^   ^^^^^^  ^^^^^
 //                        |        |                |       |- Is it required?
 //                        |        |                |- The default value.
-//                                                     This can be of type string, bool, any int.. / uint.. or float..
+//                        |        |                   This can be of type string, bool, any int.. / uint.. or float..
 //                        |        |- Help string
 //                        |- The arg name; Used like this: go run main.go --value 420.69
         },
@@ -77,7 +77,7 @@ func main() {
 }
 
 ```
-Now, try running these four commands:
+Now, try running these four commands, some will fail:
   - `go run main.go --last-name Smith --age 47`
   - `go run main.go --last-name Smith --first-name John`
   - `go run main.go --last-name Smith --first-name John --age 69`
