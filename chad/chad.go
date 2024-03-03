@@ -67,8 +67,7 @@ func (slf *Chad) RegisterArgs(args []Arg, positionalArgCount int) {
 // If no args were registered we can't really validate them so there goes that >.<
 func (slf *Chad) checkRegistered() {
 	if !slf.argsRegistered {
-		fmt.Println("cannot validate parsed args without registering any; use Chad.RegisterArgs(...) to do so.")
-		os.Exit(1)
+		panic("cannot validate parsed args without registering any; use Chad.RegisterArgs(...) to do so.")
 	}
 }
 
@@ -112,45 +111,21 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 				// Not required but present
 				slf.Result.Flags[arg.Name] = value
 			} else {
-				// Not required and not present
+				// Not required and not present, which means we need to parse the default args.
 				def_value := slf.DefinedFlags[arg.Name].DefaultValue
 				switch value := def_value.(type) {
-
-				case int:
+				case int, int8, int16, int32, int64:
 					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case int8:
+				case uint, uint8, uint16, uint32, uint64:
 					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case int16:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case int32:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case int64:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-
-				case uint:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case uint8:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case uint16:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case uint32:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-				case uint64:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%d", value)
-
-				case float32:
+				case float32, float64:
 					slf.Result.Flags[arg.Name] = fmt.Sprintf("%f", value)
-				case float64:
-					slf.Result.Flags[arg.Name] = fmt.Sprintf("%f", value)
-
 				case bool:
 					slf.Result.Flags[arg.Name] = ""
-
 				case string:
 					slf.Result.Flags[arg.Name] = value
-
 				default:
-					panic("Yo bro idk!")
+					panic(fmt.Errorf("encountered unknown type while trying to parse default value of defined argument %v", slf.DefinedFlags[arg.Name]))
 				}
 				
 			}
@@ -163,7 +138,7 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 			}
 		}
 
-		fmt.Printf("Did not receive required flag '%v'\n", arg.Name)
+		fmt.Printf("Did not receive required flag '%v'.\n", arg.Name)
 		os.Exit(1)
 	}
 
@@ -174,7 +149,7 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 				continue check_supplied_but_undefined_flags
 			}
 		}
-		fmt.Printf("An undefined argument '%v' was supplied.\n", parsed)
+		fmt.Printf("An unknown flag '%v' was supplied.\n", parsed)
 		os.Exit(1)
 	}
 
@@ -187,6 +162,17 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 	slf.Result.Positionals = append(slf.Result.Positionals, parsed_args.Positionals...)
 }
 
+func (slf *Chad) IsFlagPresent(key string) bool {
+	_, ok := slf.Result.Flags[key]
+	return ok
+}
+
+func (slf *Chad) IsFlagDefault(key string) bool {
+	if flag, ok := slf.Result.Flags[key]; ok {
+		return flag == slf.DefinedFlags[key].DefaultValue
+	}
+	return false
+}
 
 func (slf *Chad) GetStringIndex(idx int) string {
 	value, err := slf.Result.GetStringIndex(idx)

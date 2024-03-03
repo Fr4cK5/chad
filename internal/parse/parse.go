@@ -62,7 +62,7 @@ func (slf *ParseResult) GetStringFlag(key string) (*string, error) {
 		return &retval, nil
 	}
 
-	return nil, fmt.Errorf("no value for key %v", key)
+	return nil, fmt.Errorf("no value found for key '%v'", key)
 }
 
 // Get an int from the parsed flags by some key `key`
@@ -75,7 +75,7 @@ func (slf *ParseResult) GetIntFlag(key string) (*int, error) {
 		return &retval, nil
 	}
 
-	return nil, fmt.Errorf("no value for key %v", key)
+	return nil, fmt.Errorf("no value found for key '%v'", key)
 }
 
 // Get a float from the parsed flags by some key `key`
@@ -88,7 +88,7 @@ func (slf *ParseResult) GetFloatFlag(key string) (*float64, error) {
 		return &retval, nil
 	}
 
-	return nil, fmt.Errorf("no value for key %v", key)
+	return nil, fmt.Errorf("no value found for key '%v'", key)
 }
 
 // Get a bool from the parsed flags by some key `key`
@@ -97,7 +97,7 @@ func (slf *ParseResult) GetBoolFlag(key string) (*bool, error) {
 		return &ok, nil
 	}
 
-	return nil, fmt.Errorf("key %v not found in boolean flags", key)
+	return nil, fmt.Errorf("key '%v' not found in boolean flags", key)
 }
 
 func checkBounds(idx, size int) bool {
