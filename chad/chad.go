@@ -3,6 +3,9 @@ package chad
 import (
 	"fmt"
 	"os"
+	"reflect"
+	"strconv"
+	"unicode"
 
 	"github.com/Fr4cK5/chad/internal/parse"
 )
@@ -102,6 +105,25 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 		Positionals: make([]string, 0),
 	}
 
+	check_supplied_but_undefined_flags:
+	for parsed := range parsed_args.Flags {
+		for defined := range slf.DefinedFlags {
+			if parsed == defined {
+				continue check_supplied_but_undefined_flags
+			}
+		}
+		fmt.Printf("An unknown flag '%v' was supplied.\n", parsed)
+		os.Exit(1)
+	}
+
+	for arg, value := range parsed_args.Flags {
+		default_value := slf.DefinedFlags[arg].DefaultValue
+		if !isTypeOk(default_value, value) {
+			fmt.Printf("Flag '%v' expects input of type '%v' but recieved 'string'.\n", arg, reflect.TypeOf(default_value).Name())
+			os.Exit(1)
+		}
+	}
+
 	flag_check:
 	for _, arg := range slf.DefinedFlags {
 		// If the arg isn't required but still present,
@@ -111,7 +133,7 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 				// Not required but present
 				slf.Result.Flags[arg.Name] = value
 			} else {
-				// Not required and not present, which means we need to parse the default args.
+				// Not required and not present, which means we need to parse the default value.
 				def_value := slf.DefinedFlags[arg.Name].DefaultValue
 				switch value := def_value.(type) {
 				case int, int8, int16, int32, int64:
@@ -139,17 +161,6 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 		}
 
 		fmt.Printf("Did not receive required flag '%v'.\n", arg.Name)
-		os.Exit(1)
-	}
-
-	check_supplied_but_undefined_flags:
-	for parsed := range parsed_args.Flags {
-		for defined := range slf.DefinedFlags {
-			if parsed == defined {
-				continue check_supplied_but_undefined_flags
-			}
-		}
-		fmt.Printf("An unknown flag '%v' was supplied.\n", parsed)
 		os.Exit(1)
 	}
 
@@ -235,4 +246,31 @@ func (slf *Chad) GetBoolFlag(key string) bool {
 		os.Exit(1)
 	}
 	return *value
+}
+
+func isTypeOk(expected interface{}, actual string) bool {
+	switch expected.(type) {
+	case string, bool:
+		return true
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return isValidInt(actual)
+	case float32, float64:
+		return isValidFloat(actual)
+	default:
+		return false
+	}
+}
+
+func isValidInt(s string) bool {
+	for _, c := range s {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidFloat(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }
