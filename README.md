@@ -5,13 +5,14 @@ An absolutely **BASED GIGACHAD** of a Go command line parser
 The Chad follows a simple yet effective parsing scheme.
 
 Have a look:
-  - `--foo "bar baz"` will assign the string `bar baz` to `foo`
+  - `--foo "bar baz"` will assign the string `bar baz` to `foo`.
   - `-foo "bar baz"` will not work, since the arg-stack `foo` contains two equal flags which would result in a double-definition error.
   - `-bar 'foo baz'` will assign the string `foo baz` to `r`. `b` and `a` will be empty since they aren't the last flag in the arg-stack.
     - The first value, after an arg-stack given its not an arg or arg-stack itself will be the last flag's value of the current arg-stack.
-  - `--HEY_how-are-you? 'good'` will assign the string `good` to `HEY_how-are-you?`. The Chad allows for a lot of creativity :D
-  - The only forbidden name
-  - Different string delimiters are also allowed: `"`, `'`, `<The backtick used to write these inline code "blocks">`
+  - `--HEY_how-are-you? 'good'` will assign the string `good` to `HEY_how-are-you?`.
+    - The Chad allows for a lot of creativity :D
+    - All arg names are allowed, as long as they don't start with a number. This is needed to be able to parse negative numbers like `-3`.
+  - Different string delimiters are also allowed: `"`, `'`, `<The backtick used to write these inline code "blocks">`.
 
 ## How to properly work with the Chad
 ```go
@@ -34,8 +35,8 @@ func main() {
     c.Parse()
 
     theValue := c.GetFloatFlag("value")
-//                               ^^^^^
-//                               |- The same name as above. If incorrect, the program will exit.
+//                              ^^^^^
+//                              |- The same name as above. If incorrect, the program will exit.
     fmt.Println(theValue)
 }
 ```
