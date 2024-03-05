@@ -294,8 +294,25 @@ func (slf *Chad) genFlagHelp() string {
 	buf := bytes.NewBuffer(buf_slice)
 	writer := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
 
+	// Put the required args first,
+	sorted := make([]Arg, 0, len(slf.DefinedFlags))
 	for _, arg := range slf.DefinedFlags {
+		if !arg.Required || arg.Name == "help" {
+			continue
+		}
+		sorted = append(sorted, arg)
+	}
+	// the optional ones second,
+	for _, arg := range slf.DefinedFlags {
+		if arg.Required || arg.Name == "help" {
+			continue
+		}
+		sorted = append(sorted, arg)
+	}
+	// the help flag last.
+	sorted = append(sorted, slf.DefinedFlags["help"])
 
+	for _, arg := range sorted {
 		var default_value string
 		switch value := arg.DefaultValue.(type) {
 		case string:
@@ -322,14 +339,14 @@ func (slf *Chad) genFlagHelp() string {
 			arg_name = "-" + arg.Name
 		}
 
-		var is_required string
+		var extra string
 		if arg.Required {
-			is_required = "Yes"
+			extra = "Required"
 		} else {
-			is_required = "No "
+			extra = fmt.Sprintf("Default = %v", default_value) 
 		}
 
-		fmt.Fprintf(writer, "    %v\t\t%v\t\t[Default = %v;\tRequired = %v]\n", arg_name, arg.Help, default_value, is_required)
+		fmt.Fprintf(writer, "    %v\t\t%v\t\t[%v]\n", arg_name, arg.Help, extra)
 	}
 
 	writer.Flush()
