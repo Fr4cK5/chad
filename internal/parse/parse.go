@@ -97,7 +97,6 @@ func (slf *ParseResult) GetBoolFlag(key string) (*bool, error) {
 	if _, ok := slf.Flags[key]; ok {
 		return &ok, nil
 	}
-
 	return nil, fmt.Errorf("key '%v' not found in boolean flags", key)
 }
 
@@ -274,8 +273,12 @@ func isValue(s string) bool {
 
 	l := len(s)
 
-	if l <= 1 {
+	if l == 0 {
 		return false
+	}
+
+	if l == 1 && unicode.IsDigit(rune(s[0])) {
+		return true
 	}
 
 	arg_prefix := strings.HasPrefix(s, "-")

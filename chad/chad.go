@@ -1,10 +1,13 @@
 package chad
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
+	"text/tabwriter"
 	"unicode"
 
 	"github.com/Fr4cK5/chad/internal/parse"
@@ -35,6 +38,7 @@ type Chad struct {
 	Result *parse.ParseResult
 	ExpectedPositionalCount int
 	argsRegistered bool
+	originalResult *parse.ParseResult
 }
 
 // Usage:
@@ -50,10 +54,11 @@ type Chad struct {
 // for the validation process to be able to execute.
 func NewChad() *Chad {
 	return &Chad{
-		make(map[string]Arg),
-		nil,
-		0,
-		false,
+		DefinedFlags: make(map[string]Arg),
+		Result: nil,
+		originalResult: nil,
+		ExpectedPositionalCount: 0,
+		argsRegistered: false,
 	}
 }
 
@@ -62,8 +67,16 @@ func NewChad() *Chad {
 func (slf *Chad) RegisterArgs(args []Arg, positionalArgCount int) {
 	slf.argsRegistered = true
 	slf.ExpectedPositionalCount = positionalArgCount
+
+	// Sneak the help flag in there!
+	slf.DefinedFlags["help"] = *NewArg("help", "Print help", false, false)
+
 	for _, arg := range args {
-		slf.DefinedFlags[arg.Name] = arg
+		if _, ok := slf.DefinedFlags[arg.Name]; !ok {
+			slf.DefinedFlags[arg.Name] = arg
+		} else {
+			panic(fmt.Errorf("tried to create flag '%v' twice", arg.Name))
+		}
 	}
 }
 
@@ -78,31 +91,40 @@ func (slf *Chad) checkRegistered() {
 func (slf *Chad) ParseFromString(input string) {
 	slf.checkRegistered()
 	slf.parse(parse.ParseFromString(input))
+	slf.exitIfFlagProvided()
 }
 
 // Parse from an input string slice
 func (slf *Chad) ParseFromSlice(input []string) {
 	slf.checkRegistered()
 	slf.parse(parse.ParseFromSlice(input))
+	slf.exitIfFlagProvided()
 }
 
 // Parse from os.Args
 func (slf *Chad) Parse() {
 	slf.checkRegistered()
 	slf.parse(parse.Parse())
+	slf.exitIfFlagProvided()
 }
 
 // This is cursed, but it should* work!
 func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 
-	if len(parsed_args.Positionals) != slf.ExpectedPositionalCount {
-		fmt.Printf("Received invalid amount of positional arguments. Expected %v, got %v\n", slf.ExpectedPositionalCount, len(parsed_args.Positionals))
-		os.Exit(1)
-	}
-
 	slf.Result = &parse.ParseResult{
 		Flags: make(map[string]string),
 		Positionals: make([]string, 0),
+	}
+	// We need to keep track of the original parse result in order to query if flags have been provided or not.
+	slf.originalResult = parsed_args
+
+	// the user provided --help
+	if slf.IsFlagPresent("help") {
+		slf.exitWithHelp("")
+	}
+
+	if len(parsed_args.Positionals) != slf.ExpectedPositionalCount {
+		slf.exitWithHelp(fmt.Sprintf("Received invalid amount of positional arguments. Expected %v, got %v.\n", slf.ExpectedPositionalCount, len(parsed_args.Positionals)))
 	}
 
 	check_supplied_but_undefined_flags:
@@ -112,15 +134,13 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 				continue check_supplied_but_undefined_flags
 			}
 		}
-		fmt.Printf("An unknown flag '%v' was supplied.\n", parsed)
-		os.Exit(1)
+		slf.exitWithHelp(fmt.Sprintf("An unknown flag '%v' was supplied.\n", parsed))
 	}
 
 	for arg, value := range parsed_args.Flags {
 		default_value := slf.DefinedFlags[arg].DefaultValue
 		if !isTypeOk(default_value, value) {
-			fmt.Printf("Flag '%v' expects input of type '%v' but recieved 'string'.\n", arg, reflect.TypeOf(default_value).Name())
-			os.Exit(1)
+			slf.exitWithHelp(fmt.Sprintf("Flag '%v' expects input of type '%v' but recieved 'string'.\n", arg, reflect.TypeOf(default_value).Name()))
 		}
 	}
 
@@ -143,7 +163,11 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 				case float32, float64:
 					slf.Result.Flags[arg.Name] = fmt.Sprintf("%f", value)
 				case bool:
-					slf.Result.Flags[arg.Name] = ""
+					if value {
+						slf.Result.Flags[arg.Name] = "true"
+					} else {
+						slf.Result.Flags[arg.Name] = "false"
+					}
 				case string:
 					slf.Result.Flags[arg.Name] = value
 				default:
@@ -160,8 +184,7 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 			}
 		}
 
-		fmt.Printf("Did not receive required flag '%v'.\n", arg.Name)
-		os.Exit(1)
+		slf.exitWithHelp(fmt.Sprintf("Did not receive required flag '%v'.\n", arg.Name))
 	}
 
 	for k, v := range parsed_args.Flags {
@@ -173,8 +196,9 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 	slf.Result.Positionals = append(slf.Result.Positionals, parsed_args.Positionals...)
 }
 
+// Check if a flag is present in the parsed arguments.
 func (slf *Chad) IsFlagPresent(key string) bool {
-	_, ok := slf.Result.Flags[key]
+	_, ok := slf.originalResult.Flags[key]
 	return ok
 }
 
@@ -188,8 +212,7 @@ func (slf *Chad) IsFlagDefault(key string) bool {
 func (slf *Chad) GetStringIndex(idx int) string {
 	value, err := slf.Result.GetStringIndex(idx)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		slf.exitWithHelp(err.Error())
 	}
 	return *value
 }
@@ -197,8 +220,7 @@ func (slf *Chad) GetStringIndex(idx int) string {
 func (slf *Chad) GetIntIndex(idx int) int {
 	value, err := slf.Result.GetIntIndex(idx)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		slf.exitWithHelp(err.Error())
 	}
 	return *value
 }
@@ -206,8 +228,7 @@ func (slf *Chad) GetIntIndex(idx int) int {
 func (slf *Chad) GetFloatIndex(idx int) float64 {
 	value, err := slf.Result.GetFloatIndex(idx)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		slf.exitWithHelp(err.Error())
 	}
 	return *value
 }
@@ -215,8 +236,7 @@ func (slf *Chad) GetFloatIndex(idx int) float64 {
 func (slf *Chad) GetStringFlag(key string) string {
 	value, err := slf.Result.GetStringFlag(key)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		slf.exitWithHelp(err.Error())
 	}
 	return *value
 }
@@ -224,8 +244,7 @@ func (slf *Chad) GetStringFlag(key string) string {
 func (slf *Chad) GetIntFlag(key string) int {
 	value, err := slf.Result.GetIntFlag(key)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		slf.exitWithHelp(err.Error())
 	}
 	return *value
 }
@@ -233,19 +252,13 @@ func (slf *Chad) GetIntFlag(key string) int {
 func (slf *Chad) GetFloatFlag(key string) float64 {
 	value, err := slf.Result.GetFloatFlag(key)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		slf.exitWithHelp(err.Error())
 	}
 	return *value
 }
 
 func (slf *Chad) GetBoolFlag(key string) bool {
-	value, err := slf.Result.GetBoolFlag(key)
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-	return *value
+	return slf.IsFlagPresent(key)
 }
 
 func isTypeOk(expected interface{}, actual string) bool {
@@ -274,3 +287,91 @@ func isValidFloat(s string) bool {
 	_, err := strconv.ParseFloat(s, 64)
 	return err == nil
 }
+
+func (slf *Chad) genFlagHelp() string {
+
+	buf_slice := make([]byte, 0, 1e4)
+	buf := bytes.NewBuffer(buf_slice)
+	writer := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
+
+	for _, arg := range slf.DefinedFlags {
+
+		var default_value string
+		switch value := arg.DefaultValue.(type) {
+		case string:
+			default_value = "\"" + default_value + "\""
+
+		// Is this necessary?
+		case bool:
+			if value {
+				default_value = "true"
+			} else {
+				default_value = "false"
+			}
+		case int, int8, int16, int32, int64,
+				uint, uint8, uint16, uint32, uint64:
+			default_value = fmt.Sprintf("%d", value)
+		case float32, float64:
+			default_value = fmt.Sprintf("%f", value)
+		}
+
+		var arg_name string
+		if len(arg.Name) > 1 {
+			arg_name = "--" + arg.Name
+		} else {
+			arg_name = "-" + arg.Name
+		}
+
+		var is_required string
+		if arg.Required {
+			is_required = "Yes"
+		} else {
+			is_required = "No "
+		}
+
+		fmt.Fprintf(writer, "    %v\t\t%v\t\t[Default = %v;\tRequired = %v]\n", arg_name, arg.Help, default_value, is_required)
+	}
+
+	writer.Flush()
+
+	return buf.String()
+}
+
+func (slf *Chad) genHelp() string {
+	help := ""
+	binary := getBinaryName()
+	arg_help := slf.genFlagHelp()
+
+	help += fmt.Sprintf("Usage: %v", binary)
+	if slf.ExpectedPositionalCount > 0 {
+		help += fmt.Sprintf(" [%v positional arguments]", slf.ExpectedPositionalCount)
+	}
+	help += " [Flags]\n\n"
+
+	help += "Flags:\n"
+	help += arg_help
+
+	return help
+}
+
+func (slf *Chad) exitWithHelp(err string) {
+	if strings.Trim(err, " \t\r\n") != "" {
+		fmt.Println("Error:")
+		fmt.Printf("    %v\n", err)
+	}
+	fmt.Println(slf.genHelp())
+	os.Exit(1)
+}
+
+func (slf *Chad) exitIfFlagProvided() {
+	if _, ok := slf.originalResult.Flags["h"]; ok {
+		slf.exitWithHelp("")
+	}
+}
+
+func getBinaryName() string {
+	exec_path := os.Args[0]
+	path_parts := strings.Split(exec_path, string(os.PathSeparator))
+	return path_parts[len(path_parts)-1]
+}
+
