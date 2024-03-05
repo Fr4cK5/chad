@@ -12,7 +12,9 @@ Have a look:
   - `--HEY_how-are-you? 'good'` will assign the string `good` to `HEY_how-are-you?`.
     - The Chad allows for a lot of creativity :D
     - All arg names are allowed, as long as they don't start with a number. This is needed to be able to parse negative numbers like `-3`.
-  - Different string delimiters are also allowed: `"`, `'`, `<The backtick used to write these inline code "blocks">`.
+  - Different string delimiters are also allowed.
+    - `"`, `'`, `<The backtick used to write these inline code "blocks">`.
+    - Keep in mind that some may not work due to the way your terminal parses strings.
 
 ## How to properly work with the Chad
 ```go
@@ -90,7 +92,6 @@ Now, try running these four commands, some will fail:
     - Supplied but not defined arguments will also cause the program to exit.
     - Basic type checking to respect every arg's default value's type.
   - Currently, this is on my list to make Chad even more based
-    - Automatic generation of a help command.
     - Allow to not exit the program if an arg's validation fails. This might be useful when using Chad in an application that must continuously parse different types of arguments.
   - What Chad will likely* never have:
     - Subcommands.
