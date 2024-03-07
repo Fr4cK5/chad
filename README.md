@@ -1,6 +1,16 @@
 # Chad
 An absolutely **BASED GIGACHAD** of a Go command line parser
 
+## Features
+  - Positional & Flag arguments.
+  - Automatic validation.
+    - Missing arguments will be caught and the program exits upon detection.
+    - Supplied but not defined arguments will also cause the program to exit.
+    - Basic type checking to respect every arg's default value's type.
+  - Suitable for different use cases.
+    - Normal stdin arg parsing.
+    - (TODO) Continuous parsing of different types of / possibly faulty inputs (Maybe you're making some cli game?)
+
 ## The Chad's Basics
 The Chad follows a simple yet effective parsing scheme.
 
@@ -30,9 +40,10 @@ func main() {
 //                        |        |- Help string
 //                        |- The arg name; Used like this: go run main.go --value 420.69
         },
-        0,
-//      ^
-//      |- The number of positional arguments expected.
+        []string{ /* ... */ },
+//                ^^^^^^^^^
+//                |- The positional arguments. Their names will be reflected in the program's help as well as your code.
+//                   Positional arguments are possible to access via name or index. Use whichever suits you the best.
     )
     c.Parse()
 
@@ -43,55 +54,77 @@ func main() {
 }
 ```
 
-## A small example
-If you'd like, you can try out this small snippet below.
+## An example since everyone likes them
+Feel free to try it out.
 ```go
 package main
 
 import (
-    "fmt"
-    "math"
+	"fmt"
+	"os"
+	"strings"
 
-    "github.com/Fr4cK5/chad/chad"
+	"github.com/Fr4cK5/chad/chad"
 )
 
 func main() {
     c := chad.NewChad()
     c.RegisterArgs(
         []chad.Arg{
-            *chad.NewArg("first-name", "Your first name", "", false),
-            *chad.NewArg("last-name", "Your last name", "", true),
-            *chad.NewArg("age", "Your age", 0, true),
+            *chad.NewArg("i", "Invert the image's colors", false, false),
+            *chad.NewArg("c", "Compress the image", 1, false),
+            *chad.NewArg("b", "Blur the image", 0, false),
+            *chad.NewArg("p", "Posterize the image", 255, false), // 255 is the default range for colors in our image.
         },
-        0,
+        []string{"filename"},
     )
     c.Parse()
 
-    last_name := c.GetStringFlag("last-name")
-    age := c.GetIntFlag("age")
-    club := int(math.Floor(float64(age) / 10.)) * 10
+    // Access the positional argument by name.
+    filename := c.StringPosName("filename")
 
-    if !c.IsFlagDefault("first-name") {
-        first_name := c.GetStringFlag("first-name")
-        fmt.Printf("Hello %v %v, enjoy your stay at the %v+ club.\n", first_name, last_name, club)
-    } else {
-        fmt.Printf("Hello Mr. / Mrs. %v, enjoy your stay at the %v+ club.\n", last_name, club)
-    }
+    // We could also access it by index:
+    // filename := c.StringIndex(0)
+
+    // "Validate" the file format
+	if !strings.HasSuffix(filename, ".png") && !strings.HasSuffix(filename, ".jpeg") {
+		fmt.Printf("File '%v' is of unknown format.\n", filename)
+		os.Exit(1)
+	}
+
+    fmt.Printf("Loading file '%v'...\n", filename)
+
+    // If the flag is not defaulted / changed by the user's input, we can use it to do something with the image.
+	if !c.IsFlagDefault("c") {
+		fmt.Printf("Compressing image by a factor of %v...\n", c.IntFlag("c"))
+	}
+
+	if !c.IsFlagDefault("b") {
+		fmt.Printf("Reducing color range from 255 to %v...\n", c.IntFlag("p"))
+	}
+
+	if !c.IsFlagDefault("b") {
+		fmt.Printf("Blurring image by %v pixels using gaussian blur...\n", c.IntFlag("b"))
+	}
+
+	if c.BoolFlag("i") {
+		fmt.Printf("Inverting image colors...\n")
+	}
+
+	extSep := strings.Index(filename, ".")
+	fmt.Printf("Saving image to '%v-01.%v'...\n", filename[:extSep], filename[extSep+1:])
+	fmt.Println("Conversion finished.")
 }
-
 ```
-Now, try running these four commands, some will fail:
-  - `go run main.go --last-name Smith --age 47`
-  - `go run main.go --last-name Smith --first-name John`
-  - `go run main.go --last-name Smith --first-name John --age 69`
-  - `go run main.go --last-name Smith --age 87 --test "Hello, World!"`
+Now try running these commands (some might fail):
+  - `go run main.go my-image.png -p 100 -ib 3`
+  - `go run main.go my-image.png -p 100 -i -b 3`
+  - `go run main.go -ip 32`
+  - `go run main.go the-other-image.jpeg -c 8 -b 4`
+  - `go run main.go --help`
 
 ## This may interest you
-  - Validation is performed automatically
-    - Missing arguments will be caught and the program exits upon detection.
-    - Supplied but not defined arguments will also cause the program to exit.
-    - Basic type checking to respect every arg's default value's type.
   - Currently, this is on my list to make Chad even more based
-    - Allow to not exit the program if an arg's validation fails. This might be useful when using Chad in an application that must continuously parse different types of arguments.
+    - Allow the program to persist if an arg's validation fails instead of just exiting.
   - What Chad will likely* never have:
-    - Subcommands.
+    - Subcommands

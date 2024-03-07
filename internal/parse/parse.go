@@ -175,7 +175,7 @@ func parseFlags(input *[]string) (*map[string]string, *[]string, error) {
 			} else {
 				assigned[item[2:]] = ""
 			}
-		} else if strings.HasPrefix(item, "-") && len(item) >= 2 {
+		} else if strings.HasPrefix(item, "-") && len(item) >= 2 && !isValue(item) {
 			flags := item[1:]
 			for j, c := range flags {
 				if c == '-' {
@@ -277,8 +277,8 @@ func isValue(s string) bool {
 		return false
 	}
 
-	if l == 1 && unicode.IsDigit(rune(s[0])) {
-		return true
+	if l == 1 {
+		return unicode.IsDigit(rune(s[0])) || unicode.IsLetter(rune(s[0]))
 	}
 
 	arg_prefix := strings.HasPrefix(s, "-")

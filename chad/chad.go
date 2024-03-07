@@ -37,6 +37,7 @@ type Chad struct {
 	DefinedFlags map[string]Arg
 	Result *parse.ParseResult
 	ExpectedPositionalCount int
+	PositionalNames []string
 	argsRegistered bool
 	originalResult *parse.ParseResult
 }
@@ -58,15 +59,17 @@ func NewChad() *Chad {
 		Result: nil,
 		originalResult: nil,
 		ExpectedPositionalCount: 0,
+		PositionalNames: nil,
 		argsRegistered: false,
 	}
 }
 
 // Register the arguments to be parsed.
 // This allows for the validation of the arguments.
-func (slf *Chad) RegisterArgs(args []Arg, positionalArgCount int) {
+func (slf *Chad) RegisterArgs(args []Arg, positionalNames []string) {
 	slf.argsRegistered = true
-	slf.ExpectedPositionalCount = positionalArgCount
+	slf.ExpectedPositionalCount = len(positionalNames)
+	slf.PositionalNames = positionalNames
 
 	// Sneak the help flag in there!
 	slf.DefinedFlags["help"] = *NewArg("help", "Print help", false, false)
@@ -76,6 +79,12 @@ func (slf *Chad) RegisterArgs(args []Arg, positionalArgCount int) {
 			slf.DefinedFlags[arg.Name] = arg
 		} else {
 			panic(fmt.Errorf("tried to create flag '%v' twice", arg.Name))
+		}
+	}
+
+	for _, name := range slf.PositionalNames {
+		if _, ok := slf.DefinedFlags[name]; ok {
+			panic(fmt.Errorf("arg '%v' is present in flags as well as positional args", name))
 		}
 	}
 }
@@ -124,7 +133,7 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 	}
 
 	if len(parsed_args.Positionals) != slf.ExpectedPositionalCount {
-		slf.exitWithHelp(fmt.Sprintf("Received invalid amount of positional arguments. Expected %v, got %v.\n", slf.ExpectedPositionalCount, len(parsed_args.Positionals)))
+		slf.exitWithHelp(fmt.Sprintf("Received invalid amount of positional arguments. Expected %v, got %v.", slf.ExpectedPositionalCount, len(parsed_args.Positionals)))
 	}
 
 	check_supplied_but_undefined_flags:
@@ -134,13 +143,13 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 				continue check_supplied_but_undefined_flags
 			}
 		}
-		slf.exitWithHelp(fmt.Sprintf("An unknown flag '%v' was supplied.\n", parsed))
+		slf.exitWithHelp(fmt.Sprintf("An unknown flag '%v' was supplied.", parsed))
 	}
 
 	for arg, value := range parsed_args.Flags {
 		default_value := slf.DefinedFlags[arg].DefaultValue
 		if !isTypeOk(default_value, value) {
-			slf.exitWithHelp(fmt.Sprintf("Flag '%v' expects input of type '%v' but recieved 'string'.\n", arg, reflect.TypeOf(default_value).Name()))
+			slf.exitWithHelp(fmt.Sprintf("Flag '%v' expects input of type '%v' but recieved 'string'.", arg, reflect.TypeOf(default_value).Name()))
 		}
 	}
 
@@ -184,7 +193,7 @@ func (slf *Chad) parse(parsed_args *parse.ParseResult) {
 			}
 		}
 
-		slf.exitWithHelp(fmt.Sprintf("Did not receive required flag '%v'.\n", arg.Name))
+		slf.exitWithHelp(fmt.Sprintf("Did not receive required flag '%v'.", arg.Name))
 	}
 
 	for k, v := range parsed_args.Flags {
@@ -202,14 +211,27 @@ func (slf *Chad) IsFlagPresent(key string) bool {
 	return ok
 }
 
+// Check if a flag retained its default value.
 func (slf *Chad) IsFlagDefault(key string) bool {
-	if flag, ok := slf.Result.Flags[key]; ok {
-		return flag == slf.DefinedFlags[key].DefaultValue
+	if result_value, ok := slf.Result.Flags[key]; ok {
+		def_value := slf.DefinedFlags[key].DefaultValue
+
+		switch v := def_value.(type) {
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			return result_value == fmt.Sprintf("%d", v)
+		case float32, float64:
+			return result_value == fmt.Sprintf("%f", v)
+		case bool:
+			return v
+		case string:
+			return v == result_value
+		}
 	}
 	return false
 }
 
-func (slf *Chad) GetStringIndex(idx int) string {
+// Get a positional value my its index in form of a string
+func (slf *Chad) StringIndex(idx int) string {
 	value, err := slf.Result.GetStringIndex(idx)
 	if err != nil {
 		slf.exitWithHelp(err.Error())
@@ -217,7 +239,8 @@ func (slf *Chad) GetStringIndex(idx int) string {
 	return *value
 }
 
-func (slf *Chad) GetIntIndex(idx int) int {
+// Get a positional value my its index in form of an int
+func (slf *Chad) IntIndex(idx int) int {
 	value, err := slf.Result.GetIntIndex(idx)
 	if err != nil {
 		slf.exitWithHelp(err.Error())
@@ -225,7 +248,8 @@ func (slf *Chad) GetIntIndex(idx int) int {
 	return *value
 }
 
-func (slf *Chad) GetFloatIndex(idx int) float64 {
+// Get a positional value my its index in form of a float64
+func (slf *Chad) FloatIndex(idx int) float64 {
 	value, err := slf.Result.GetFloatIndex(idx)
 	if err != nil {
 		slf.exitWithHelp(err.Error())
@@ -233,7 +257,38 @@ func (slf *Chad) GetFloatIndex(idx int) float64 {
 	return *value
 }
 
-func (slf *Chad) GetStringFlag(key string) string {
+// Get a positional value my its name in form of a string
+func (slf *Chad) StringPosName(name string) string {
+	idx := slf.posIndexByName(name)
+	if idx == -1 {
+		panic(fmt.Errorf("positional arg '%v' not found", name))
+	}
+
+	return slf.StringIndex(idx)
+}
+
+// Get a positional value my its name in form of an int
+func (slf *Chad) IntPosName(name string) int {
+	idx := slf.posIndexByName(name)
+	if idx == -1 {
+		panic(fmt.Errorf("positional arg '%v' not found", name))
+	}
+
+	return slf.IntIndex(idx)
+}
+
+// Get a positional value my its name in form of a float64
+func (slf *Chad) FloatPosName(name string) float64 {
+	idx := slf.posIndexByName(name)
+	if idx == -1 {
+		panic(fmt.Errorf("positional arg '%v' not found", name))
+	}
+
+	return slf.FloatIndex(idx)
+}
+
+// Get a flag's value by its name in form of a string
+func (slf *Chad) StringFlag(key string) string {
 	value, err := slf.Result.GetStringFlag(key)
 	if err != nil {
 		slf.exitWithHelp(err.Error())
@@ -241,7 +296,8 @@ func (slf *Chad) GetStringFlag(key string) string {
 	return *value
 }
 
-func (slf *Chad) GetIntFlag(key string) int {
+// Get a flag's value by its name in form of an int
+func (slf *Chad) IntFlag(key string) int {
 	value, err := slf.Result.GetIntFlag(key)
 	if err != nil {
 		slf.exitWithHelp(err.Error())
@@ -249,7 +305,8 @@ func (slf *Chad) GetIntFlag(key string) int {
 	return *value
 }
 
-func (slf *Chad) GetFloatFlag(key string) float64 {
+// Get a flag's value by its name in form of a float64
+func (slf *Chad) FloatFlag(key string) float64 {
 	value, err := slf.Result.GetFloatFlag(key)
 	if err != nil {
 		slf.exitWithHelp(err.Error())
@@ -257,7 +314,8 @@ func (slf *Chad) GetFloatFlag(key string) float64 {
 	return *value
 }
 
-func (slf *Chad) GetBoolFlag(key string) bool {
+// Check if a flag is supplied, synonymous to Chad.IsFlagPresent(key)
+func (slf *Chad) BoolFlag(key string) bool {
 	return slf.IsFlagPresent(key)
 }
 
@@ -354,6 +412,17 @@ func (slf *Chad) genFlagHelp() string {
 	return buf.String()
 }
 
+func (slf *Chad) genPositionals() string {
+	positionals := ""
+	for i, str := range slf.PositionalNames {
+		positionals += "<" + strings.ToUpper(str) + ">"
+		if i < len(slf.PositionalNames)-1 {
+			positionals += " "
+		}
+	}
+	return positionals
+}
+
 func (slf *Chad) genHelp() string {
 	help := ""
 	binary := getBinaryName()
@@ -361,7 +430,7 @@ func (slf *Chad) genHelp() string {
 
 	help += fmt.Sprintf("Usage: %v", binary)
 	if slf.ExpectedPositionalCount > 0 {
-		help += fmt.Sprintf(" [%v positional arguments]", slf.ExpectedPositionalCount)
+		help += fmt.Sprintf(" %v", slf.genPositionals())
 	}
 	help += " [Flags]\n\n"
 
@@ -374,7 +443,7 @@ func (slf *Chad) genHelp() string {
 func (slf *Chad) exitWithHelp(err string) {
 	if strings.Trim(err, " \t\r\n") != "" {
 		fmt.Println("Error:")
-		fmt.Printf("    %v\n", err)
+		fmt.Printf("    %v\n\n", err)
 	}
 	fmt.Println(slf.genHelp())
 	os.Exit(1)
@@ -392,3 +461,12 @@ func getBinaryName() string {
 	return path_parts[len(path_parts)-1]
 }
 
+func (slf *Chad) posIndexByName(name string) int {
+	idx := -1
+	for i, iter_name := range slf.PositionalNames {
+		if name == iter_name {
+			idx = i
+		}
+	}
+	return idx
+}
